@@ -8,7 +8,7 @@ add some nice comments here
 try:
     import hpfeeds
 except ImportError:
-    libemu = None
+    hpfeeds = None
 import argparse
 import os
 import modules.postfix_creds
