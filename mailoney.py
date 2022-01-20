@@ -7,7 +7,8 @@ add some nice comments here
 
 import argparse
 import os
-import hpfeeds
+try:
+    import hpfeeds
 import modules.postfix_creds
 import modules.open_relay
 import modules.schizo_open_relay
