@@ -5,10 +5,12 @@ __version__ = '0.1'
 add some nice comments here
 '''
 
-import argparse
-import os
 try:
     import hpfeeds
+except ImportError:
+    libemu = None
+import argparse
+import os
 import modules.postfix_creds
 import modules.open_relay
 import modules.schizo_open_relay
