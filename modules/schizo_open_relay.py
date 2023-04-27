@@ -81,7 +81,7 @@ class SMTPChannel(asynchat.async_chat):
         self.__mailfrom = None
         self.__rcpttos = []
         self.__data = ''
-        self.uuid = uuid4()
+        self.uuid = str(uuid4())
         from mailoney import srvname
         self.__fqdn = srvname
         try:
