@@ -14,6 +14,7 @@ import asyncore
 import asynchat
 import re
 import json
+from uuid import uuid4
 
 sys.path.append("../")
 import mailoney
@@ -21,7 +22,7 @@ import mailoney
 output_lock = threading.RLock()
 hpc,hpfeeds_prefix = mailoney.connect_hpfeeds()
 
-def log_to_file(file_path, ip, port, data):
+def log_to_file(file_path, ip, port, data, uuid=""):
     with output_lock:
         try:
             with open(file_path, "a") as f:
@@ -29,7 +30,7 @@ def log_to_file(file_path, ip, port, data):
                 res = re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,6}\b', data)
                 if len(data) > 4096:
                     data = "BIGSIZE"
-                dictmap = dict({'timestamp' : strftime("20%y-%m-%dT%H:%M:%S.000000Z", gmtime()), 'src_ip' :ip, 'src_port' : port,  'data' :data , 'smtp_input' : res })
+                dictmap = dict({'timestamp' : strftime("20%y-%m-%dT%H:%M:%S.000000Z", gmtime()), 'uuid': uuid, 'src_ip' :ip, 'src_port' : port,  'data' :data , 'smtp_input' : res })
                 res = json.dumps(dictmap)
                 f.write(res + '\n')
                 message = "[{0}][{1}:{2}] {3}".format(time.time(), ip, port, data.encode("string-escape"))
@@ -44,14 +45,14 @@ def log_to_hpfeeds(channel, data):
             hpfchannel=hpfeeds_prefix+"."+channel
             hpc.publish(hpfchannel, message)
 
-def process_packet_for_shellcode(packet, ip, port):
+def process_packet_for_shellcode(packet, ip, port, uuid):
     if libemu is None:
         return
     emulator = libemu.Emulator()
     r = emulator.test(packet)
     if r is not None:
         # we have shellcode
-        log_to_file(mailoney.logpath+"/shellcode.log", ip, port, "We have some shellcode")
+        log_to_file(mailoney.logpath+"/shellcode.log", ip, port, "We have some shellcode", uuid=uuid)
         #log_to_file(mailoney.logpath+"/shellcode.log", ip, port, emulator.emu_profile_output)
         #log_to_hpfeeds("/shellcode", ip, port, emulator.emu_profile_output)
         log_to_file(mailoney.logpath+"/shellcode.log", ip, port, packet)
@@ -80,6 +81,7 @@ class SMTPChannel(asynchat.async_chat):
         self.__mailfrom = None
         self.__rcpttos = []
         self.__data = ''
+        self.uuid = uuid4()
         from mailoney import srvname
         self.__fqdn = srvname
         try:
@@ -105,13 +107,13 @@ class SMTPChannel(asynchat.async_chat):
         self.__rolling_buffer += data
         if len(self.__rolling_buffer) > 1024 * 1024:
             self.__rolling_buffer = self.__rolling_buffer[len(self.__rolling_buffer) - 1024 * 1024:]
-        process_packet_for_shellcode(self.__rolling_buffer, self.__addr[0], self.__addr[1])
+        process_packet_for_shellcode(self.__rolling_buffer, self.__addr[0], self.__addr[1], self.uuid)
         del data
 
     # Implementation of base class abstract method
     def found_terminator(self):
         line = EMPTYSTRING.join(self.__line)
-        log_to_file(mailoney.logpath+"/commands.log", self.__addr[0], self.__addr[1], line.encode('string-escape'))
+        log_to_file(mailoney.logpath+"/commands.log", self.__addr[0], self.__addr[1], line.encode('string-escape'), uuid=self.uuid)
         log_to_hpfeeds("commands",  json.dumps({ "Timestamp":format(time.time()), "ServerName": self.__fqdn, "SrcIP": self.__addr[0], "SrcPort": self.__addr[1],"Commmand" : line.encode('string-escape')}))
 
         #print >> DEBUGSTREAM, 'Data:', repr(line)
